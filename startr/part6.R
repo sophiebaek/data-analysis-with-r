@@ -148,3 +148,166 @@ plot(importance_knn)
 # y -> pi(x) = p(Y = 1|X = x)
 # logit(pi(x)) = log(pi(x) / (1 - pi(x))) = alpha + beta x -> log안에 있는 것: 오즈비 (odds ratio) = 양성 확률은 음성 확률의 몇배인가?
 # 기울기가 가장 가파른 곳: x = -alpha / beta
+
+##############################################################################
+
+library(caret)
+
+# LogitBoost
+# ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+# logitFit <- train(target~.,
+#                   data = train,
+#                   method = "LogitBoost",
+#                   trControl = ctrl,
+#                   metric = "Accuracy")
+# logitFit
+
+# 로지스틱 회귀분석:
+# 1. Boosted Logistic Regression: 약한 분류기 여러개를 계속 더하여 강하게 만듦
+  # method = 'LogitBoost'
+# 2. Logistic Model Trees: 로지스틱 + 나무
+  # method = 'LMT'
+# 3. Penalized Logistic Regression
+  # method = 'plr'
+# 4. Regularized Losgistic Regression
+  # method = 'regLogistic'
+
+rawdata <- read.csv(file = "/Users/jiyeonbaek/Documents/Jiyeon\ Baek/Projects/data-analysis-with-r/startr/data/heart.csv", header = TRUE)
+str(rawdata)
+
+# 타켓 클래스 범주화
+rawdata$target <- as.factor(rawdata$target)
+unique(rawdata$target)
+
+# 연속형 독립변수 표준화
+rawdata$age <- scale(rawdata$age)
+rawdata$trestbps <- scale(rawdata$trestbps)
+rawdata$chol <- scale(rawdata$chol)
+rawdata$thalach <- scale(rawdata$thalach)
+rawdata$oldpeak <- scale(rawdata$oldpeak)
+rawdata$slope <- scale(rawdata$slope)
+
+# 범주형 독립변수
+newdata <- rawdata
+factorVar <- c("sex", "cp", "fbs", "restecg", "exang", "ca", "thal")
+newdata[, factorVar] = lapply(newdata[, factorVar], factor)
+
+# 트레이닝 테스트 나누기 (7:3)
+set.seed(2020)
+datatotal <- sort(sample(nrow(newdata), nrow(newdata)*0.7))
+train <- newdata[datatotal,]
+test <- newdata[-datatotal,]
+
+train_x <- train[, 1:12]
+train_y <- train[, 13]
+
+test_x <- test[, 1:12]
+test_y <- test[, 13]
+
+# LogitBoost
+ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+logitFit <- train(target~.,
+                  data = train,
+                  method = "LogitBoost",
+                  trControl = ctrl,
+                  metric = "Accuracy")
+logitFit
+plot(logitFit)
+
+pred_test <- predict(logitFit, newdata = test)
+confusionMatrix(pred_test, test$target)
+
+importance_logit <- varImp(logitFit, scale = FALSE)
+plot(importance_logit)
+
+##############################################################################
+
+# Naive Bayes Classification
+# 베이즈 정리: P(X|Y) = P(X,Y) / P(Y)
+  # P(X,Y) = P(X|Y)P(Y) = P(Y|X)P(X)
+  # P(X|Y) = P(Y|X)P(X) / P(Y)
+
+# P(X|Y) = P(Y|X)P(X) / P(Y):
+  # P(X) -> 사전확률 (Prior Probability): 이벤트 발생 전 확률
+  # P(X|Y) -> 사후확률 (Posterior Probability): 이벤트 발생 후 확률
+  # P(X|Y)는 P(Y|X)P(X)에 비례
+  # P(Y)는 확률변수가 아닌 상수로 고려! (조건이 주어졌다 (given))
+
+# 피쳐들은 서로 조건부독립 (conditional independent)
+# 조건부독립: P(X1,X2|Y) = P(X1|Y)P(X2|Y)
+
+##############################################################################
+
+# ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+# nbFit <- train(Class~.,
+#                data = train,
+#                method = "naive_bayes",
+#                trControl = ctrl,
+#                preProcess = c("center", "scale"),
+#                metric = "Accuracy")
+# nbFit
+
+# 나이브 베이즈를 제공하는 패키지들:
+# - naivebayes 패키지: method = 'naive_bayes' (추천)
+# - bnclassify 패키지:
+  # method = 'nbDiscrete'
+  # method = 'manb' -> Model Averaged Naive Bayes: 모든 가능한 피쳐조합의 조건부확률의 평균
+  # method = 'awnb' -> Attribute Weighting: 조건부 확률에 가중치 부여
+# - klaR 패키지: method = 'nb'
+
+# 나이브 베이즈 결과:
+# - usekernel
+  # 커널밀도추정 (Kernel Density Estimation): 데이터의 히스토그램을 보고 실제 분포를 추정
+    # smoothing
+# - adjust
+  # Bandwidth: Bandwidth 값이 달라지면 추정 커널밀도함수 형태가 달라진다
+  # adjust -> bandwidth를 조절한다는 뜻
+# - laplace
+  # 라플라스 스무딩 (Laplace Smoothing or Additive Smoothing): 데이터 수가 적을 경우, 0 또는 1과 같이 극단적인 값 (0 또는 1)으로 추정하는 것 방지
+
+library(caret)
+
+rawdata <- read.csv(file = "/Users/jiyeonbaek/Documents/Jiyeon\ Baek/Projects/data-analysis-with-r/startr/data/wine.csv", header = TRUE)
+rawdata$Class <- as.factor(rawdata$Class)
+str(rawdata)
+
+analdata <- rawdata
+
+set.seed(2020)
+datatotal <- sort(sample(nrow(analdata), nrow(analdata)*0.7))
+train <- rawdata[datatotal,]
+test <- rawdata[-datatotal,]
+
+str(train)
+
+train_x <- train[, 1:13]
+train_y <- train[, 14]
+
+test_x <- test[, 1:13]
+test_y <- test[, 14]
+
+ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+nbFit <- train(Class~.,
+               data = train,
+               method = "naive_bayes",
+               trControl = ctrl,
+               preProcess = c("center", "scale"),
+               metric = "Accuracy")
+nbFit
+plot(nbFit)
+
+pred_test <- predict(nbFit, newdata = test)
+confusionMatrix(pred_test, test$Class)
+
+importance_nb <- varImp(nbFit, scale = FALSE)
+plot(importance_nb) # ROC 커브의 면적이 넓을 수록 중요도 상승
+
+##############################################################################
+
+# Decision Tree
+# Node
+  # 루트 노드 (Root node) / 부모 노드
+  # 리프 노드 (Leaf node) / 자식 노드
+# 테스트의 결과는 또다른 테스트가 될 수도 있다
+
+# 좋은 Decision Tree란?: 가능한 한 가장 작은 나무
