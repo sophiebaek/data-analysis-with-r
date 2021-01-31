@@ -311,3 +311,270 @@ plot(importance_nb) # ROC 커브의 면적이 넓을 수록 중요도 상승
 # 테스트의 결과는 또다른 테스트가 될 수도 있다
 
 # 좋은 Decision Tree란?: 가능한 한 가장 작은 나무
+
+# Decision Tree에서 각 트리의 스코어링 방법: 노드별 무질서 측정 후 퀄리티 테스트
+# 무질서 (disorder) 측정 공식 (엔트로피):
+# D(set) = -P/T log_2 P/T - N/T log_2 N/T
+  # T: 노드 내 전체 데이터 개수
+  # P: Positive 데이터 갯수
+  # N: Negative 데이터 갯수
+# 무질서는 낮을 수록 좋음!
+# 양성비율 = P/T -> 양성비율이 0과 1에 가까울수록 무질서가 낮다. / 1/2일때 무질서가 가장 높음
+
+# 테스트 퀄리티 (작을 수록 좋음)
+# Q(Test) = sigma D(sets) * 해당 노트 데이터 수 / 테스트 전체 데이터 수
+
+# 타겟이 연속형인 경우 -> 평균값을 사용하여 예측
+
+# Decision Tree의 단점: 오버피팅 -> 일반화 하기 어려움
+
+# Random Forest:
+# 1. n개의 랜덤 데이터 샘플 선택 (중복 가능) -> 배깅 (bagging): bootstrap aggregating
+# 2. d개의 피쳐 선택 (중복 불가능)
+# 3. Decision Tree 학습
+# 4. 각 Decision Tree 결과의 투표를 통해 클라스 할당
+
+##############################################################################
+
+# Decision Tree 순서:
+# 1. 패키지 설치
+install.packages("tree")
+library(tree)
+
+# 2. 기본 트리
+treeRaw <- tree(Class~., data = train)
+plot(treeRaw)
+text(treeRaw)
+
+# 3. cross-validation -> 적절한 사이즈 결정
+cv_tree <- cv.tree(treeRaw, FUN = prune.misclass)
+# FUN -> 가지치기 함수 선택
+# prune.missclass -> 오분류 기준
+plot(cv_tree)
+
+# 4. 가지치기 (pruning)
+prune_tree <- prune.misclass(treeRaw, best = 4) # best = 4: cross-validation을 통해 구한 사이즈
+plot(prune_tree)
+text(prune_tree, pretty = 0) # pretty = 0: 분할 피쳐 이름을 바꾸지 않음
+
+# 5. 예측
+pred <- predict(prune_tree, test, type = 'class')
+confusionMatrix(pred, test$Class)
+
+##############################################################################
+
+# Random Forest
+# install.packages("caret", dependencies = TRUE)
+library(caret)
+
+ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+rfFit <- train(Class~.,
+               data = train,
+               method = "rf", # randomForest 사용
+               trControl = ctrl,
+               preProcess = c("center", "scale"),
+               metric = "Accuracy")
+
+##############################################################################
+
+# Decision Tree에서 오른쪽이 TRUE (예), 왼쪽이 FALSE (아니오)
+# Size = Depth
+
+# Random Forest 결과에서 mtry: 각 트리에서 랜덤하게 선택되는 분할 피쳐 후보 갯수
+  # mtry가 작을수록 tree 크기도 작아짐
+
+##############################################################################
+
+library(caret)
+
+rawdata <- read.csv(file = "/Users/jiyeonbaek/Documents/Jiyeon\ Baek/Projects/data-analysis-with-r/startr/data/wine.csv", header = TRUE)
+rawdata$Class <- as.factor(rawdata$Class)
+str(rawdata)
+
+analdata <- rawdata
+
+set.seed(2020)
+datatotal <- sort(sample(nrow(analdata), nrow(analdata)*0.7))
+train <- rawdata[datatotal,]
+test <- rawdata[-datatotal,]
+
+str(train)
+
+train_x <- train[, 1:13]
+train_y <- train[, 14]
+
+test_x <- test[, 1:13]
+test_y <- test[, 14]
+
+# install.packages("tree")
+library(tree)
+
+treeRaw <- tree(Class~., data = train)
+plot(treeRaw)
+text(treeRaw)
+
+cv_tree <- cv.tree(treeRaw, FUN = prune.misclass)
+plot(cv_tree)
+
+prune_tree <- prune.misclass(treeRaw, best = 4)
+plot(prune_tree)
+text(prune_tree, pretty = 0)
+
+pred <- predict(prune_tree, test, type = 'class')
+confusionMatrix(pred, test$Class)
+
+ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+rfFit <- train(Class~.,
+               data = train,
+               method = "rf", # randomForest 사용
+               trControl = ctrl,
+               preProcess = c("center", "scale"),
+               metric = "Accuracy")
+rfFit
+plot(rfFit)
+
+pred_test <- predict(rfFit, newdata = test)
+confusionMatrix(pred_test, test$Class)
+
+importance_rf <- varImp(rfFit, scale = FALSE)
+plot(importance_rf)
+
+##############################################################################
+
+# Support Vector Machine
+# 중심선과 경계선 사이 여백 -> margin (마진)
+# w vector = (w_1, w_2) -> 중심선에 수직인 벡터
+# norm = 벡터의 길이
+
+# w vector @ x vector = c -> 중심선
+# w vector @ x vector > c -> +
+# w vector @ x vector < c -> -
+
+# 결정 조건 (decision rule):
+# w vector @ x vector + b > 0
+
+# 영역 표시:
+# w vector @ x vector_+ + b >= 1 -> +
+# w vector @ x vector_- + b <= -1 -> -
+
+# 중심선과 경계선 사이 표현
+# 0 <= w vector @ x vector + b <= 1
+# -1 <= w vector @ x vector + b <= 0
+
+# 두개의 제약식을 하나로 합침: y_i(w vector @ x vector + b) - 1 >= 0
+
+# 경계선에 걸쳐 있는 데이터 표현:
+# y_i(w vector @ x vector + b) - 1 = 0
+
+# 서포트 벡터 간 너비 (width)
+# = (x vector_+ - x vector_-) @ w vector/norm(w vector)
+# = 2 / norm(w vector)
+# 서포트 벡터 간 너비가 클수록 좋은 모형
+# 너비 최대화:
+# max(2 / norm(w vector))
+# = max(1 / norm(w vector))
+# = min(norm(w vector))
+# = min(1/2 norm(w vector)^2)
+# = min(1/2(w vector @ w vector)) -> 벡터 w 자기 자신과의 내적값의 최소화
+
+# 최적화 (Optimization):
+# - 목적 함수 (objective function): min(1/2 norm(w vector)^2)
+# - 제약 조건 (constraint): y_i(w vector @ x vector + b) - 1 = 0 -> 경계선/서포터벡터
+# 제약조건 하에서 목적 함수의 최적화가 목표!
+
+# 라그랑지안 (Lagrangian): 목적함수와 제약식을 한꺼번에 표현
+# 라그랑주 듀얼 함수 (Lagrange Dual Function) -> 데이터 자신과의 내적에 달려있다
+
+##############################################################################
+
+# 선형 서포트 벡터 머신
+ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+svm_linear_fit <- train(Class~.,
+                        data = train,
+                        method = "svmLinear",
+                        trControl = ctrl,
+                        preProcess = c("center", "scale"),
+                        metric = "Accuracy")
+svm_linear_fit
+
+# 비선형 서포트 벡터 머신
+ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+svm_poly_fit <- train(Class~.,
+                        data = train,
+                        method = "svmPoly",
+                        trControl = ctrl,
+                        preProcess = c("center", "scale"),
+                        metric = "Accuracy")
+svm_poly_fit
+
+# caret의 kernlab 패키지 사용
+
+# 공간이 변함에 따라 나를 나타내는 좌표가 바뀜
+# 비선형 구분 -> 피쳐 공간 변형 후 선형 모형으로 구분 -> 종이를 펴면 비선형 모양! (원래 공간으로 돌아가면 비선형 모양)
+
+##############################################################################
+
+# 비선형 서포트 벡터 머신 결과 해석:
+  # degree: polynomial degree -> 커널의 차수 설정
+  # scale: 데이터의 스케일 -> 다항식의 파라미터 (parameter)를 스케일링
+  # C: Cost (loss) -> 로지스틱에서 배운 Cost와 동일, 학습 모형의 비용 (cost) 설정, 경계선의 복잡성을 컨트롤한다.
+
+##############################################################################
+
+# 선형 서포트 벡터 머신
+# install.packages("caret", dependencies = TRUE)
+library(caret)
+
+rawdata <- read.csv(file = "/Users/jiyeonbaek/Documents/Jiyeon\ Baek/Projects/data-analysis-with-r/startr/data/wine.csv", header = TRUE)
+rawdata$Class <- as.factor(rawdata$Class)
+str(rawdata)
+
+analdata <- rawdata
+
+set.seed(2020)
+datatotal <- sort(sample(nrow(analdata), nrow(analdata)*0.7))
+train <- rawdata[datatotal,]
+test <- rawdata[-datatotal,]
+
+str(train)
+
+train_x <- train[, 1:13]
+train_y <- train[, 14]
+
+test_x <- test[, 1:13]
+test_y <- test[, 14]
+
+ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+svm_linear_fit <- train(Class~.,
+                        data = train,
+                        method = "svmLinear",
+                        trControl = ctrl,
+                        preProcess = c("center", "scale"),
+                        metric = "Accuracy")
+svm_linear_fit
+
+pred_test <- predict(svm_linear_fit, newdata = test)
+confusionMatrix(pred_test, test$Class)
+
+importance_linear <- varImp(svm_linear_fit, scale = FALSE)
+plot(importance_linear)
+
+# 비선형 서포트 벡터 머신
+ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+svm_poly_fit <- train(Class~.,
+                        data = train,
+                        method = "svmPoly",
+                        trControl = ctrl,
+                        preProcess = c("center", "scale"),
+                        metric = "Accuracy")
+svm_poly_fit
+
+plot(svm_poly_fit)
+
+pred_test <- predict(svm_poly_fit, newdata = test)
+confusionMatrix(pred_test, test$Class)
+
+importance_poly <- varImp(svm_poly_fit, scale = FALSE)
+plot(importance_poly)
+
+# 비선형 SVM이 선형 SVM보다 overfitting이 심할 수도 있다. (항상 그렇다는 것은 아님)
